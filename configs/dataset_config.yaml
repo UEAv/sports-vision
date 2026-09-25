@@ -1,0 +1,88 @@
+# =========================================================
+# Dataset Configuration & Version Record
+# Sports Video Analytics Pipeline
+# Last updated: 2026-09-24
+# =========================================================
+
+datasets:
+
+  roots_rise_iq:
+    source: "https://huggingface.co/datasets/amandeepds1/roots_and_riseIQ"
+    status: "downloaded"
+    date_downloaded: "2026-09-24"
+    location: "data/roots_rise/"
+    contents:
+      - "3 raw match clips (.mp4, ~11-12 MB each)"
+      - "3 timeline videos (_timeline.mp4, ~33-34 MB each)"
+      - "3 JSON annotation files (event-level: category, type, x/y coords, player/team ids, frame-aligned)"
+    license: "UNKNOWN - no dataset card, no license file found. Treat as unverified. Do not redistribute or publish without confirming rights with the uploader."
+    intended_use: "Small validation/sanity-check set - cross-check pipeline's frame alignment and event detection against real labeled data."
+    notes: "Uploader account (amandeepds1) appears personal, not an official org. Only 3 clips - not sufficient as primary training data."
+
+  soccernet_v2_labels:
+    source: "SoccerNet Python package (pip install SoccerNet)"
+    status: "downloaded"
+    date_downloaded: "2026-09-24"
+    location: "data/soccernet/"
+    contents:
+      - "500 Labels-v2.json files across train/valid/test splits"
+    license: "Research/non-commercial only. Governed by SoccerNet NDA. No redistribution of underlying broadcast content."
+    intended_use: "Primary action-spotting ground truth (goals, cards, subs, etc. with timestamps) for Phases 6-9."
+    notes: "Labels only - no video yet. Does not require NDA password or gated HF access."
+
+  soccernet_v2_videos:
+    source: "https://huggingface.co/datasets/SoccerNet/SoccerNet_raw_HQ"
+    status: "downloaded (partial - 3 sample matches)"
+    date_requested: "2026-09-24"
+    date_downloaded: "2026-09-24"
+    location: "data/soccernet/videos-224p/"
+    revision: "videos-224p"
+    contents:
+      - "england_epl/2016-2017/2016-08-14 - 18-00 Arsenal 3 - 4 Liverpool/ (1_224p.mkv, 2_224p.mkv)"
+      - "england_epl/2016-2017/2016-09-24 - 19-30 Arsenal 3 - 0 Chelsea/ (1_224p.mkv, 2_224p.mkv)"
+      - "england_epl/2016-2017/2016-10-17 - 22-00 Liverpool 0 - 0 Manchester United/ (1_224p.mkv, 2_224p.mkv)"
+    total_size: "~975 MB (6 .mkv files, 2 halves x 3 matches)"
+    license: "Gated + NDA. Research/non-commercial only. No redistribution, no publication of raw footage, no removal of broadcaster watermarks."
+    intended_use: "Bulk training data for Phases 3-9. Currently 3 sample matches for pipeline development - scale up later once pipeline is validated."
+    notes: "Full branch is 182GB (videos-224p) up to 2.19TB (videos-HQ) - deliberately downloaded only 3 games via --include to avoid storage overload. Required BOTH NDA password AND separate HF gated-repo access request (both approved 2026-09-24)."
+
+  ball_action_spotting:
+    source: "https://huggingface.co/datasets/SoccerNet/SN-BAS-2023"
+    status: "downloaded (zips extracted pending)"
+    date_requested: "2026-09-24"
+    date_downloaded: "2026-09-24"
+    location: "data/ball_action/spotting-ball-2023/"
+    contents:
+      - "train.zip (~3.94 GB)"
+      - "valid.zip (~0.94 GB)"
+      - "test.zip (~2.16 GB)"
+      - "challenge.zip (~1.92 GB)"
+    total_size: "8.97 GB"
+    contents_expected: "7 fully annotated games, 12 event classes (Pass, Drive, Header, High Pass, Out, Cross, Throw In, Shot, Ball Player Block, Player Successful Tackle, Free Kick, Goal)"
+    license: "Gated via Hugging Face repo permissions (password system deprecated for this task). Research/non-commercial only."
+    intended_use: "High-precision event labels for Phase 8 (T-DEED) - denser, more precise timing than main SoccerNet-v2 labels."
+    notes: "Separate gated-repo approval from soccernet_v2_videos - both approved 2026-09-24 around the same time."
+
+# =========================================================
+# Directory structure convention
+# =========================================================
+directory_structure:
+  raw_sources:
+    - "data/roots_rise/"
+    - "data/soccernet/"
+    - "data/ball_action/"
+  model_ready_splits:
+    - "data/train/"
+    - "data/val/"
+    - "data/test/"
+    - "data/test_private/  # held-out, never used during development - final evaluation only"
+  rule: "Never mix raw source data with split data. A manifest (CSV/JSON) must record which source clip/game went into which split - do not rely on folder placement alone."
+
+# =========================================================
+# Change log
+# =========================================================
+change_log:
+  - date: "2026-09-24"
+    change: "Initial dataset config created. Roots & Rise IQ and SoccerNet labels downloaded. SoccerNet videos and Ball Action Spotting access requested, pending review."
+  - date: "2026-09-24"
+    change: "SoccerNet_raw_HQ and SN-BAS-2023 gated access both approved. Downloaded 3 sample SoccerNet-v2 matches (975MB, videos-224p) and full Ball Action Spotting dataset (8.97GB, all 4 splits). Ball action zips extracted."
