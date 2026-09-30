@@ -1,0 +1,140 @@
+# =========================================================
+# Class Mapping - Target 15-class taxonomy vs source datasets
+# Sports Video Analytics Pipeline
+# Last updated: 2026-09-30
+# =========================================================
+
+target_classes:
+  - pass
+  - pass_received
+  - recovery
+  - tackle
+  - interception
+  - ball_out_of_play
+  - clearance
+  - take_on
+  - substitution
+  - block
+  - aerial_duel
+  - shot
+  - save
+  - foul
+  - goal
+
+mapping:
+  pass:
+    roots_rise: ["pass"]
+    soccernet: []
+    ball_action_spotting: ["Pass"]
+
+  pass_received:
+    roots_rise: ["pass_received"]
+    soccernet: []
+    ball_action_spotting: []
+
+  recovery:
+    roots_rise: ["recovery"]
+    soccernet: []
+    ball_action_spotting: []
+
+  tackle:
+    roots_rise: ["tackle"]
+    soccernet: []
+    ball_action_spotting: ["Player Successful Tackle"]
+
+  interception:
+    roots_rise: ["interception"]
+    soccernet: []
+    ball_action_spotting: []
+
+  ball_out_of_play:
+    roots_rise: []
+    soccernet: ["Ball out of play"]
+    ball_action_spotting: ["Out"]
+
+  clearance:
+    roots_rise: []
+    soccernet: ["Clearance"]
+    ball_action_spotting: []
+
+  take_on:
+    roots_rise: []
+    soccernet: []
+    ball_action_spotting: []
+    status: "GAP - no source dataset labels this class. Needs a 4th data source or drop from taxonomy."
+
+  substitution:
+    roots_rise: []
+    soccernet: ["Substitution"]
+    ball_action_spotting: []
+
+  block:
+    roots_rise: []
+    soccernet: []
+    ball_action_spotting: ["Ball Player Block"]
+
+  aerial_duel:
+    roots_rise: []
+    soccernet: []
+    ball_action_spotting: ["Header"]
+    status: "LOW CONFIDENCE - a header is not always a duel. Needs manual review of clips before trusting this mapping."
+
+  shot:
+    roots_rise: ["shot"]
+    soccernet: ["Shots on target", "Shots off target"]
+    ball_action_spotting: ["Shot"]
+
+  save:
+    roots_rise: ["save"]
+    soccernet: []
+    ball_action_spotting: []
+    status: "GAP - only Roots & Rise IQ (3 clips) has this label. SoccerNet and Ball Action Spotting do not track goalkeeper saves."
+
+  foul:
+    roots_rise: []
+    soccernet: ["Foul"]
+    ball_action_spotting: []
+
+  goal:
+    roots_rise: ["goal", "goal_conceded"]
+    soccernet: ["Goal"]
+    ball_action_spotting: ["Goal"]
+
+# =========================================================
+# Discarded source events - do not map to any target class
+# Decision: unmapped source events are discarded, not folded
+# into existing classes and no new target classes are added.
+# =========================================================
+discarded_events:
+  soccernet:
+    - "Indirect free-kick"
+    - "Direct free-kick"
+    - "Corner"
+    - "Kick-off"
+    - "Offside"
+    - "Yellow card"
+    - "Red card"
+    - "Yellow->red card"
+    - "Throw-in"
+    - "Penalty"
+  ball_action_spotting:
+    - "Drive"
+    - "High Pass"
+    - "Cross"
+    - "Free Kick"
+    - "Throw In"
+
+# =========================================================
+# Open gaps requiring resolution before training
+# =========================================================
+open_gaps:
+  - class: "take_on"
+    issue: "No source dataset contains this label at all."
+  - class: "save"
+    issue: "Only present in Roots & Rise IQ (3 clips, 1 instance). Insufficient for training a reliable classifier on its own."
+  - class: "aerial_duel"
+    issue: "Mapped to Ball Action Spotting's 'Header', but not all headers are duels - mapping needs manual verification against sample clips before trusting it."
+
+change_log:
+  - date: "2026-09-30"
+    change: "Initial class mapping created from Stage 3 annotation analysis. Decision made to discard all unmapped source events rather than fold into existing classes or add new target classes."
