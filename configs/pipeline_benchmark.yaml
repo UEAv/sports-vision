@@ -1,0 +1,60 @@
+# =========================================================
+# Video Backend Benchmark & Decision Record
+# Stage 4 - Video Processing Pipeline
+# Last updated: 2026-10-01
+# =========================================================
+
+benchmark:
+  test_video: "data/soccernet/videos-224p/england_epl/2016-2017/2016-08-14 - 18-00 Arsenal 3 - 4 Liverpool/1_224p.mkv"
+  frames_tested: 200
+  resize_target: [224, 224]
+  date_run: "2026-09-30"
+
+  results:
+    opencv:
+      load_sec: 0.0232
+      decode_sec: 0.1033
+      preprocess_sec: 0.0297
+      total_sec: 0.1561
+      frames_decoded: 200
+
+    pyav:
+      load_sec: 0.0566
+      decode_sec: 1.0328
+      preprocess_sec: 0.0380
+      total_sec: 1.1274
+      frames_decoded: 200
+      relative_to_opencv: "~7.2x slower"
+
+    ffmpeg_cli:
+      load_sec: 1.8009
+      decode_sec: 2.1385
+      preprocess_sec: 0.0364
+      total_sec: 3.9758
+      frames_decoded: 200
+      relative_to_opencv: "~25.5x slower"
+
+decision:
+  chosen_backend: "OpenCV"
+  reasoning: >
+    OpenCV was fastest across every measured stage (load, decode, preprocess)
+    by a wide margin. PyAV's per-frame Python binding overhead made it ~7x
+    slower despite wrapping similar underlying decode logic. FFmpeg via CLI
+    was slowest overall (~25x), dominated by process-launch overhead (1.8s
+    just to load/probe) - a poor fit for frame-by-frame access, even though
+    FFmpeg itself is efficient at bulk video conversion tasks (a different
+    use case than this pipeline needs).
+  implication: >
+    VideoPipeline (src/pipeline/video_pipeline.py) is built entirely on
+    OpenCV (cv2.VideoCapture). This also matches what Phases 0-1 already
+    used, so no rework was needed there.
+  caveat: >
+    Benchmark was run on a single CPU-only machine, against one 224p video.
+    Results may differ on GPU-accelerated decoding setups (not available
+    here) or with much higher-resolution source video. Re-benchmark if the
+    hardware environment changes significantly (e.g. moving training to a
+    cloud GPU instance with different I/O characteristics).
+
+change_log:
+  - date: "2026-10-01"
+    change: "Initial benchmark results and backend decision recorded after completing Stage 4's reusable VideoPipeline class (load, validate, metadata, frame access, timestamp conversion, sampling, resize, normalize, batch, clip, temporal windows)."
