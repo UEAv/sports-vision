@@ -1,0 +1,68 @@
+# =========================================================
+# Model Evaluation Record
+# Stage 5 - Object Detection (YOLOv8)
+# Last updated: 2026-10-01
+# =========================================================
+
+pretrained_baseline_test:
+  model: "yolov8n.pt (COCO pretrained, no fine-tuning)"
+  date_tested: "2026-10-01"
+  environment: "Local (CPU)"
+  test_setup: "5 frames sampled across one SoccerNet-v2 224p match video"
+  findings:
+    - "'person' class detected consistently (15-18 per frame) - reliable baseline for player/referee/goalkeeper, though COCO cannot distinguish between them (all show as generic 'person')"
+    - "'sports ball' detected in only 1 of 5 frames - unreliable out of the box"
+    - "One false positive ('chair') at one timestamp - likely a sideline object misclassified"
+  conclusion: "Confirmed need for fine-tuning on football-specific classes (Ball, Player, Referee) and highlighted ball detection as the primary challenge before any training occurred."
+
+resolution_comparison_test:
+  date_tested: "2026-10-01"
+  test_setup: "Same Ball Action Spotting match, same 3 timestamps, compared at 224p vs 720p"
+  findings:
+    - "Ball detection pattern was IDENTICAL at both resolutions (found at 1 of 3 timestamps, same timestamp, similar confidence)"
+    - "Resolution was NOT the limiting factor in this test - ball likely genuinely out of frame/occluded at the 2 'missed' timestamps rather than a resolution issue"
+  conclusion: "Ball detection difficulty is not simply fixed by higher resolution alone - deferred further investigation (e.g. testing against labeled ball-event timestamps specifically) as a lower priority."
+
+fine_tuned_model:
+  base_model: "yolov8n.pt (pretrained on COCO, fine-tuned - NOT trained from scratch)"
+  date_trained: "2026-10-01"
+  environment: "Google Colab (Tesla T4 GPU)"
+  training_data: "Roboflow 'Detect Players' dataset (v7) - 1,462 images, 1023 train / 293 valid / 146 test"
+  classes: ["Ball", "Player", "Referee"]
+  note: "No 'Goalkeeper' class in this dataset - only 3 of the 4 target classes covered. Goalkeeper distinction remains an open gap."
+  training_config:
+    epochs: 50
+    image_size: 640
+    batch_size: 16
+    early_stopping_patience: 10
+
+  evaluation_results:
+    overall:
+      mAP50: 0.7957
+      mAP50_95: 0.5026
+      precision: 0.8649
+      recall: 0.7679
+    per_class_mAP50:
+      player: 0.9832
+      referee: 0.9044
+      ball: 0.4997
+
+  interpretation: >
+    Player and referee detection are strong (90%+ mAP50) and usable as-is.
+    Ball detection remains weak (50.0% mAP50) even after football-specific
+    fine-tuning - consistent with manual visual inspection where the ball
+    was difficult to spot even by eye in raw frames. This is a known,
+    common challenge in sports computer vision (small, fast-moving, often
+    motion-blurred object), not a flaw specific to this training run.
+
+  recommendations_for_ball_detection:
+    - "Consider higher-resolution input crops focused on likely ball regions rather than full-frame detection"
+    - "Consider a dedicated small-object detection technique (e.g. image tiling) for the ball specifically"
+    - "Lean on temporal tracking (Phase 6-9) to compensate for single-frame ball detection misses - trajectory continuity across frames can recover missed detections"
+    - "Re-test against timestamps known to contain ball events (from Ball Action Spotting labels) rather than arbitrary timestamps, for a more representative ball-detection benchmark"
+
+  weights_location: "Google Drive: /dataset/sport_vision/backup_staging/yolo_runs/football_finetune_v1/weights/best.pt (bring back to local models/ folder)"
+
+change_log:
+  - date: "2026-10-01"
+    change: "Completed pretrained baseline test, resolution comparison test, and first fine-tuning run on Roboflow football dataset. Player/referee detection strong; ball detection remains the primary open challenge."
