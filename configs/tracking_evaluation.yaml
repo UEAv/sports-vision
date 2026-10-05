@@ -1,0 +1,79 @@
+# =========================================================
+# Tracking Evaluation Record
+# Stage 6 - Multi-Object Tracking
+# Last updated: 2026-10-05
+# =========================================================
+
+implementation:
+  trackers_tested: ["ByteTrack", "BoT-SORT"]
+  deepsort: "Not tested - ByteTrack/BoT-SORT results were sufficient after tuning, so DeepSORT was not needed (per checklist's 'if necessary' condition)."
+  detection_model: "models/yolov8_football_finetune_v1.pt (Stage 5 fine-tuned YOLOv8)"
+  test_footage: "SoccerNet-v2 224p, England EPL 2016-2017, Arsenal vs Liverpool, 10 minutes in, 15 second clip, continuous on-pitch play (no camera cuts)"
+
+tuning_history:
+  attempt_1_defaults:
+    settings: "iou=0.7 (default), track_buffer=30 (default)"
+    results:
+      unique_track_ids: 83
+      max_concurrent_tracks: 27
+      short_tracks_pct: 25.3
+      id_switches_flagged: 119
+    verdict: "Severe fragmentation and ID instability - not usable."
+
+  attempt_2_iou_tuning:
+    settings: "iou=0.5 (tightened NMS), track_buffer=30 (default)"
+    reasoning: "Confidence distribution check showed most detections were already high-confidence (median 0.721) - confidence filtering would not help. Tightened IoU instead to collapse duplicate overlapping boxes on the same player."
+    results:
+      unique_track_ids: 92
+      max_concurrent_tracks: 20
+      short_tracks_pct: 47.8
+      id_switches_flagged: 80
+    verdict: "Fixed duplicate/ghost box problem (concurrent count now realistic) but WORSENED fragmentation - traded one problem for another."
+
+  attempt_3_track_buffer_tuning:
+    settings: "iou=0.5, track_buffer=75 (2.5x default, custom tracker config)"
+    reasoning: "track_buffer controls how long a track survives brief occlusion before giving up. Increased from 30 to 75 frames (~3 seconds at 25fps) to give players more room to be briefly hidden behind others without losing identity."
+    results_bytetrack:
+      unique_track_ids: 34
+      max_concurrent_tracks: 23
+      short_tracks_pct: 8.8
+      id_switches_flagged: 22
+      avg_visibility: 0.872
+      avg_velocity_px_per_sec: 31.8
+      max_velocity_px_per_sec: 441.8
+    results_botsort:
+      unique_track_ids: 34
+      max_concurrent_tracks: 23
+      short_tracks_pct: 8.8
+      id_switches_flagged: 26
+      avg_visibility: 0.886
+      avg_velocity_px_per_sec: 28.4
+      max_velocity_px_per_sec: 423.2
+    verdict: "Major improvement across every metric. ByteTrack and BoT-SORT now perform comparably, with ByteTrack showing slightly fewer ID switches (22 vs 26) and BoT-SORT showing marginally higher visibility (0.886 vs 0.872) on this clip."
+
+final_decision:
+  chosen_tracker: "ByteTrack (bytetrack_tuned.yaml)"
+  reasoning: >
+    ByteTrack and BoT-SORT perform near-identically after tuning on this
+    footage, with ByteTrack showing fewer ID switches. ByteTrack is also
+    simpler (motion-only, no appearance/ReID model) and was already
+    marginally faster to run locally on CPU. BoT-SORT remains a viable
+    fallback if future footage (more crowded scenes, more occlusion)
+    shows ByteTrack's motion-only approach struggling more.
+  tuned_config_location: "configs/trackers/bytetrack_tuned.yaml"
+
+known_limitations:
+  - issue: "Camera cuts are not handled"
+    detail: "Trackers rely on continuous motion between frames. A hard broadcast camera cut (e.g. wide shot to close-up) breaks tracking by design - this is a fundamental limitation of motion/appearance-based tracking, not a bug. All testing was done on continuous-shot footage to isolate real tracking quality from this separate, known issue."
+  - issue: "Edge-of-frame detections can be unreliable"
+    detail: "The single highest recorded velocity (441.8 px/sec) was traced to a malformed bounding box at the extreme right edge of frame (box height ~186-205px in a 224px-tall frame, width pinned to the frame boundary) - a detection glitch, not a real player sprint. Edge-of-frame detection quality should be treated with caution in later phases."
+  - issue: "ID switch detection is heuristic, not ground-truth-verified"
+    detail: "No ground-truth tracking labels are available for this footage. The 'possible ID switches' count is a position/timing-based heuristic (candidates for review), not a certain count of real switches - true switches may be somewhat over- or under-counted."
+
+deliverable:
+  trajectories_file: "data/analysis/tracking/bytetrack_trajectories.json"
+  contents: "Per-player trajectory: track_id, position history, bbox history, confidence, velocity (px/sec) between consecutive points, overall visibility score, avg/max velocity"
+
+change_log:
+  - date: "2026-10-05"
+    change: "Completed Stage 6: implemented and compared ByteTrack/BoT-SORT, tuned IoU and track_buffer through 3 iterations, computed trajectory/velocity/visibility, documented known limitations (camera cuts, edge detections, heuristic switch counting)."
