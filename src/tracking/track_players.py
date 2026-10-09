@@ -1,21 +1,19 @@
 """
-Stage 6 - Multi-Object Tracking with ByteTrack
+Stage 6 - Multi-Object Tracking with ByteTrack / BoT-SORT
 
-Uses your fine-tuned YOLO model + Ultralytics' built-in ByteTrack to follow
-each player across frames, assigning a persistent track ID.
-
-Detection (Stage 5): "There is a player here" - one frame, no memory.
-Tracking (Stage 6):  "This is player #7, and I've been following him" -
-                      across frames, with identity.
+Uses your fine-tuned YOLO model + Ultralytics' tracker to follow each
+player across frames, assigning a persistent track ID.
 
 Usage:
     python src/tracking/track_players.py
+    python src/tracking/track_players.py --video "data/ball_action/.../1_720p.mkv" --output-prefix 720p_ --start 120 --duration 15
 """
 
 from pathlib import Path
 import sys
 import json
-import numpy as np
+import argparse
+import cv2
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 from src.utils.logger import get_logger
@@ -24,41 +22,22 @@ from ultralytics import YOLO
 logger = get_logger(__name__)
 
 MODEL_PATH = "models/yolov8_football_finetune_v1.pt"
-TEST_VIDEO = "data/soccernet/videos-224p/england_epl/2016-2017/2016-08-14 - 18-00 Arsenal 3 - 4 Liverpool/1_224p.mkv"
+DEFAULT_VIDEO = "data/soccernet/videos-224p/england_epl/2016-2017/2016-08-14 - 18-00 Arsenal 3 - 4 Liverpool/1_224p.mkv"
 OUTPUT_DIR = Path("data/analysis/tracking")
-
-# How much footage to track - keep SHORT for a first local CPU test.
-# 10 seconds at 25fps = 250 frames, which is plenty to see tracking behavior
-# without a long CPU-bound wait.
-START_SEC = 90.0
-DURATION_SEC = 10.0
+FPS = 25.0  # confirmed uniform across your dataset in Stage 3
 
 
-def run_tracking(tracker_config: str = "bytetrack.yaml"):
-    """
-    Run tracking and return structured per-frame, per-track data.
-
-    WHY tracker_config is a parameter: this is what lets us later swap in
-    'botsort.yaml' with zero other code changes, to directly compare the
-    two trackers on the same footage (your checklist's "experiment with
-    BoT-SORT" step).
-    """
+def run_tracking(video_path: str, tracker_config: str, start_sec: float, duration_sec: float):
+    """Run tracking and return structured per-frame, per-track data."""
     model = YOLO(MODEL_PATH)
-    fps = 25.0  # confirmed uniform across your dataset in Stage 3
 
-    start_frame = int(START_SEC * fps)
-    num_frames = int(DURATION_SEC * fps)
+    start_frame = int(start_sec * FPS)
+    num_frames = int(duration_sec * FPS)
 
-    logger.info(f"Tracking with {tracker_config} | frames {start_frame} to {start_frame + num_frames}")
+    logger.info(f"Tracking with {tracker_config} | video={Path(video_path).name} | frames {start_frame} to {start_frame + num_frames}")
 
-    # model.track() with stream=True processes frame-by-frame and REMEMBERS
-    # track identities between calls - this internal memory is what turns
-    # detection into tracking. persist=True keeps that memory across the
-    # whole loop below.
     all_records = []
-
-    import cv2
-    cap = cv2.VideoCapture(TEST_VIDEO)
+    cap = cv2.VideoCapture(video_path)
     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
 
     for frame_offset in range(num_frames):
@@ -66,17 +45,12 @@ def run_tracking(tracker_config: str = "bytetrack.yaml"):
         if not ret:
             break
 
-        # iou controls Non-Max Suppression: how much two boxes can overlap
-        # before being merged into one. Default (0.7) is permissive - analysis
-        # showed most duplicate detections were NOT low-confidence (median
-        # conf 0.721), so confidence filtering alone wouldn't fix ghost tracks.
-        # Tightening iou forces heavily-overlapping boxes on the same player
-        # to collapse into a single detection instead of surviving as two.
+        # iou=0.5 (tightened NMS) + tuned tracker config (track_buffer=75) -
+        # the settings that fixed both the duplicate-box and ID-switch
+        # problems found during Stage 6 evaluation.
         results = model.track(frame, tracker=tracker_config, persist=True, verbose=False, iou=0.5)[0]
 
         if results.boxes.id is None:
-            # No tracks confirmed yet this frame (can happen in the first
-            # few frames while the tracker is still initializing)
             continue
 
         for box, track_id, conf, cls in zip(
@@ -84,7 +58,7 @@ def run_tracking(tracker_config: str = "bytetrack.yaml"):
         ):
             class_name = model.names[int(cls)]
             if class_name != "Player":
-                continue  # this stage focuses on PLAYER tracking specifically
+                continue
 
             x1, y1, x2, y2 = box.tolist()
             center_x = (x1 + x2) / 2
@@ -92,7 +66,7 @@ def run_tracking(tracker_config: str = "bytetrack.yaml"):
 
             all_records.append({
                 "frame": start_frame + frame_offset,
-                "timestamp_sec": round((start_frame + frame_offset) / fps, 3),
+                "timestamp_sec": round((start_frame + frame_offset) / FPS, 3),
                 "track_id": int(track_id),
                 "bbox": [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)],
                 "confidence": round(float(conf), 3),
@@ -106,11 +80,15 @@ def run_tracking(tracker_config: str = "bytetrack.yaml"):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video", default=DEFAULT_VIDEO, help="Path to video file")
+    parser.add_argument("--output-prefix", default="", help="Prefix for output filenames, e.g. '720p_'")
+    parser.add_argument("--start", type=float, default=600.0, help="Start timestamp in seconds")
+    parser.add_argument("--duration", type=float, default=15.0, help="Duration in seconds")
+    args = parser.parse_args()
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Run BOTH trackers on the exact same footage for a fair comparison.
-    # botsort.yaml uses appearance (visual) features in addition to motion -
-    # may handle close/overlapping players better than ByteTrack's motion-only approach.
     trackers = {
         "bytetrack": "configs/trackers/bytetrack_tuned.yaml",
         "botsort": "configs/trackers/botsort_tuned.yaml",
@@ -118,14 +96,13 @@ def main():
 
     for name, config in trackers.items():
         print(f"\n{'='*20} {name.upper()} {'='*20}")
-        records = run_tracking(config)
+        records = run_tracking(args.video, config, args.start, args.duration)
 
-        output_path = OUTPUT_DIR / f"{name}_raw_records.json"
+        output_path = OUTPUT_DIR / f"{args.output_prefix}{name}_raw_records.json"
         with open(output_path, "w") as f:
             json.dump(records, f, indent=2)
 
         print(f"Saved {len(records)} tracking records to: {output_path.resolve()}")
-
         unique_ids = sorted(set(r["track_id"] for r in records))
         print(f"Unique track IDs: {len(unique_ids)}")
 

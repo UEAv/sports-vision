@@ -1,0 +1,66 @@
+# =========================================================
+# Ball Context Evaluation Record
+# Stage 7 - Team / Player / Ball Context
+# Last updated: 2026-10-07
+# =========================================================
+
+method:
+  approach: "Per-frame highest-confidence Ball detection (no multi-object tracking needed - only one real ball exists)."
+  test_footage: "Ball Action Spotting, Middlesbrough vs Preston North End, 720p, 15 second clip"
+  possession_proxy: "A player within 80px of the ball is flagged as 'potential_possession' - a distance-based heuristic, not a certainty (a nearby defender is not necessarily in possession)."
+
+tuning_history:
+  attempt_1_no_confidence_filter:
+    results:
+      visibility: 0.605
+      avg_velocity_px_per_sec: 378.8
+      max_velocity_px_per_sec: 16441.0
+      median_velocity_px_per_sec: 152.8
+    diagnosis: >
+      Max velocity was wildly implausible (16,441 px/sec) and far above the
+      median (152.8), indicating outliers skewing the average. Manual
+      inspection of the fastest "movements" showed they came almost
+      exclusively from LOW-confidence detections (0.26-0.63), consistent
+      with false-positive detections jumping to the wrong location in
+      frame rather than genuine fast ball motion.
+    verdict: "Average/max velocity not trustworthy without filtering."
+
+  attempt_2_confidence_threshold_0.5:
+    reasoning: "Discard ball detections below 0.5 confidence entirely (treat as a gap/not-detected) rather than trusting their position."
+    results:
+      visibility: 0.533
+      avg_velocity_px_per_sec: 189.6
+      max_velocity_px_per_sec: 875.9
+      median_velocity_px_per_sec: 140.0
+      percentile_95_px_per_sec: 598.1
+    diagnosis: >
+      Max velocity dropped 18x (16441 -> 875.9) and is now consistent with
+      the 95th percentile (598.1), not a wild outlier. All 5 fastest
+      recorded movements now have high confidence (0.70-0.88) and plausible
+      values for a fast kick/pass. Median barely changed (152.8 -> 140.0),
+      confirming the bulk of the data was already trustworthy - only the
+      extreme low-confidence tail was the problem.
+    verdict: "SUCCESS - velocity data now trustworthy. Visibility dropped modestly (60.5% -> 53.3%) as an honest trade-off for reliability."
+
+final_results:
+  ball_visibility: 0.533
+  avg_velocity_px_per_sec: 189.6
+  max_velocity_px_per_sec: 875.9
+  frames_with_potential_possession: "140/200 detected frames (70%)"
+  confidence_threshold_used: 0.5
+
+relationship_to_stage5: >
+  Ball visibility (53.3%) is broadly consistent with Stage 5's ball
+  detection mAP50 of 50.0% - this tracking-level result independently
+  confirms the earlier finding that ball detection remains the weakest
+  part of the detection pipeline, now quantified in a real sequential
+  context rather than isolated single-frame tests.
+
+known_limitations:
+  - "Possession is a distance-based proxy only, not a true possession determination (does not account for ball height/trajectory, which player is actively playing it, etc.)"
+  - "Visibility gaps (47% of frames) mean ball trajectory is NOT continuous - any downstream use (e.g. Phase 8 action spotting) must handle missing-ball frames explicitly, not assume continuous tracking."
+  - "Confidence threshold (0.5) was chosen based on one diagnostic check on one clip - may need re-validation on different footage/lighting conditions."
+
+change_log:
+  - date: "2026-10-07"
+    change: "Implemented ball context extraction. Diagnosed and fixed a severe velocity outlier problem via confidence filtering (0.5 threshold), reducing max velocity by 18x while preserving median accuracy."

@@ -1,0 +1,43 @@
+# =========================================================
+# Team Classification Evaluation Record
+# Stage 7 - Team / Player / Ball Context
+# Last updated: 2026-10-06
+# =========================================================
+
+method:
+  pipeline: "player crop -> torso region -> mean HSV color -> clustering"
+  clustering_methods_tested: ["DBSCAN", "KMeans (n_clusters=2)"]
+
+attempt_1_224p:
+  video: "SoccerNet-v2, Arsenal vs Liverpool, 224p"
+  results:
+    dbscan: "1 real cluster (19 players) + 15 noise points - failed to separate teams"
+    kmeans: "28 vs 6 split - far too uneven to represent two 11-a-side teams"
+  diagnosis: "Visual inspection of torso crops showed they were too small/low-detail at 224p to extract meaningful jersey color. One inspected crop also appeared to be a sideline referee, not an active player - likely a detector misclassification."
+  verdict: "Not usable - resolution was the primary suspected cause."
+
+attempt_2_720p:
+  video: "Ball Action Spotting, Middlesbrough vs Preston North End, 720p"
+  reasoning: "Switched to 720p footage (already available locally) to test whether resolution was genuinely the limiting factor."
+  results:
+    dbscan:
+      clusters_found: 4
+      noise_points: 4
+      cluster_0_size: 19
+      cluster_1_size: 13
+      cluster_2_size: 2
+      cluster_3_size: 2
+    kmeans:
+      team_0_size: 20
+      team_1_size: 20
+  diagnosis: "Visual inspection confirmed jersey colors were now clearly distinguishable by eye. KMeans produced a near-even 20/20 split, consistent with two real football teams. DBSCAN's two small 2-player clusters were manually inspected: 1 was correctly identified as the referee, 1 was correctly identified as a goalkeeper (distinct kit color from own team, as expected by football rules). The remaining 2 flagged players were regular outfield players in unusual poses/lighting, not a real distinct category."
+  verdict: "SUCCESS - resolution was confirmed as the root cause. 720p+ footage is required for reliable jersey-color-based team classification; 224p is not sufficient."
+
+conclusion:
+  chosen_approach: "KMeans (n_clusters=2) for primary home/away team assignment - guarantees a usable 2-way split."
+  dbscan_role: "Useful as a SECONDARY signal for flagging potential goalkeepers/referees (small outlier clusters), but not reliable enough alone - only 50% of DBSCAN's small-cluster flags were correct in manual spot-check (1 referee + 1 goalkeeper correctly flagged; 2 false positives were regular players)."
+  resolution_requirement: "720p or higher required for any appearance/color-based visual feature extraction in this project (team classification, and likely future pose/appearance work). 224p remains acceptable for detection and tracking (Stages 5-6), which do not depend on fine color detail."
+
+change_log:
+  - date: "2026-10-06"
+    change: "Completed team classification testing. Identified and confirmed resolution (224p vs 720p) as the critical factor for appearance-based classification. DBSCAN found useful but imperfect as a goalkeeper/referee outlier signal."

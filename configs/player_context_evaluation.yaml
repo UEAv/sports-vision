@@ -1,0 +1,127 @@
+# =========================================================
+# Player Context, Camera Motion and Pose Evaluation Record
+# Stage 7 - Team / Player / Ball Context
+# Last updated: 2026-10-09
+# =========================================================
+
+test_setup:
+  video: "Ball Action Spotting, Middlesbrough vs Preston North End, 720p (1280x720), 25 fps"
+  clip: "15 seconds starting at 120s (frames 3000-3375)"
+  tracks: "ByteTrack with tuned config (Stage 6), Player class only"
+  scope_note: "One clip from one match. Every number below is from this clip only."
+
+player_context:
+  fields_produced:
+    - "position (bbox centre), speed, direction (atan2 heading), proximity to ball, proximity to nearest other player"
+    - "camera_motion_px_per_sec, speed_compensated_px_per_sec, direction_compensated_degrees, edge_clipped flag"
+  direction_convention: "0 deg = right, 90 deg = down (image y grows downward), +-180 = left, -90 = up. Relative to the video frame, not the pitch."
+  proximity_results:
+    avg_proximity_to_ball_px: 315.4
+    closest_player_to_ball_px: 31.0
+    note: "Proximity to ball is only available on frames where the ball was detected (Stage 7 ball context, confidence >= 0.5)."
+
+camera_motion:
+  finding: >
+    All speeds measured in image pixels include camera movement. The broadcast
+    camera is moving most of the time, so apparent speeds in Stage 6 and 7
+    are mostly camera motion, not player motion.
+  method: >
+    Per-frame median velocity vector across all tracked players, used as the
+    camera-motion estimate (minimum 4 players per frame, edge-clipped boxes
+    excluded). Compensated velocity = apparent velocity minus that median.
+  measured:
+    median_shared_motion_px_per_sec: 205.1
+    p95_shared_motion_px_per_sec: 687.5
+    frames_with_shared_motion_over_300_px_per_sec: "97 of 374 frames (26%) after excluding edge-clipped boxes; 95 of 374 (25%) before excluding them"
+    frames_with_camera_estimate: "374 of 375"
+    note: "Median and p95 come from check_camera_motion.py, run before edge exclusion was added."
+  whip_pan_event:
+    frames: "3091-3104 (123.64s-124.16s)"
+    shared_motion_px_per_sec: "roughly 760-790, almost purely horizontal (vy near 0)"
+    visual_confirmation: "Victor viewed pose_per_player_123s.jpg: every player in motion blur."
+  correction_to_earlier_conclusion: >
+    Earlier in Stage 7, track #11 at ~920 px/sec was called a genuine sprint.
+    That was wrong. Two different players (#11 and #33) shared the same speed
+    and heading, the ball showed its fastest movement in the same window, and
+    pose failed on 9 of 10 players at 123.8s. After subtracting the camera
+    (hand calculation at frame 3095: apparent vector ~(927, 55) minus camera
+    ~(787, 10)) track #11 comes out at roughly 150 px/sec.
+
+speed_results:
+  apparent_speed_px_per_sec:
+    avg: 246.7
+    max: 929.1
+  compensated_speed_px_per_sec_before_edge_exclusion:
+    avg: 73.8
+    median: 58.0
+    p95: 195.0
+    p99: 284.0
+    max: 796.9
+  compensated_speed_px_per_sec_after_edge_exclusion:
+    avg: 72.5
+    median: 55.7
+    p95: 195.3
+    p99: 275.4
+    max: 664.2
+  edge_clipped_detections: "262 of 3089 (8.5%), margin 15 px on a 1280x720 frame"
+  robustness_observation: >
+    Median, p95 and p99 barely moved when edge-clipped boxes were excluded,
+    while the maximum changed a lot (796.9 -> 664.2). Headline speed numbers
+    should be the median and p95, not the maximum.
+
+outliers:
+  explained_artifact:
+    track: 46
+    frame: 3095
+    detail: >
+      Apparent speed 16.6 px/sec while the camera moved at 787.6 px/sec, box
+      [8.1, 344.3, 29.3, 454.3] pinned against the left border and only 21 px
+      wide. The box did not move with the scene, so subtracting the camera
+      left roughly the camera's own speed (796.9). Track #34 showed the same
+      pattern at the right border (box ending at x=1280). Same failure family
+      as the Stage 6 edge-of-frame glitch.
+    likely_cause: "Probably different players entering at the border and inheriting one ID. Not confirmed."
+  unexplained:
+    track: 91
+    frame: 3273
+    detail: >
+      Apparent 583.6, camera 367.6, compensated 664.2 (it moved against the
+      camera direction). Box not at an edge; nearest player 64 px away.
+      Could be real motion or a tracker association jump. Single frame, not
+      resolved.
+  probably_same_artifact_slipping_past_margin:
+    - "track #46 frame 3096: box x1=20.6, just outside the 15 px margin"
+    - "track #72 frame 3372: box y2=695, 25 px from the bottom border"
+    suggestion: "Widening EDGE_MARGIN_PX (for example to 30-40) would flag these. Not applied yet."
+  sustained_and_probably_real:
+    - "track #184, frames 3333-3334: apparent 596-625 vs camera 215-255, compensated 341-410, consistent across consecutive frames"
+
+pose_estimation:
+  model: "yolov8n-pose.pt, pretrained on COCO 17-keypoint skeleton. Not fine-tuned on football."
+  full_frame_attempt:
+    result: "5 poses across 3 sampled frames, none at 123.8s. In the 120s image Victor counted 5 players with skeletons on only 2."
+    verdict: "Low recall; skeletons not tied to track IDs."
+  per_player_crop_attempt:
+    method: "Crop each tracked player (15% padding), upscale to ~480 px tall, run pose, keep the skeleton nearest the crop centre, map keypoints back to frame coordinates."
+    usable_definition: ">= 8 of 17 keypoints with confidence >= 0.5 (starting guess, not tuned)"
+    results:
+      "120.0s": "4 of 5 players usable"
+      "123.8s": "1 of 10 players usable"
+      "130.0s": "10 of 11 players usable"
+    overall: "15 of 26 (58%) found and usable"
+    excluding_123_8s: "14 of 16 (88%)"
+    verdict: "Crops fixed the recall problem. The 123.8s failure coincides with the whip pan and visible motion blur."
+  hypothesis_not_yet_tested: "Pose success drops when camera_motion_px_per_sec is high. Only one frame supports this so far; test across more frames."
+
+known_limitations:
+  - "All speeds are image-space. Compensation removes camera translation (panning) only, not zoom or camera cuts."
+  - "The median can absorb real motion when the whole team moves together (for example a fast counter-attack)."
+  - "Frames with fewer than 4 non-edge players get no camera estimate and no compensated speed."
+  - "Ball velocity (ball_context.json) is still apparent speed. It stores only a speed magnitude, so the camera cannot yet be subtracted."
+  - "No pixel-to-metre conversion, so speeds are in px/sec, not m/s."
+  - "Pose measured on 3 sampled frames only. Skeleton alignment on the 120s and 130s images has not been recorded."
+  - "Everything comes from one 15-second clip of one match."
+
+change_log:
+  - date: "2026-10-09"
+    change: "Added player context, camera-motion compensation with edge-clipping flag, and per-player crop pose estimation. Recorded the correction to the earlier sprint conclusion and the open outliers."

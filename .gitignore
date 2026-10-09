@@ -27,3 +27,12 @@ logs/
 
 # Env secrets
 .env
+kaggle.json
+
+# Model weights (Ultralytics downloads these into the project root)
+*.pt
+*.pth
+*.engine
+
+# Local staging copy made for the Google Drive backup
+backup_staging/

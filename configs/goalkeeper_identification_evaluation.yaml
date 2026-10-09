@@ -1,0 +1,50 @@
+# =========================================================
+# Goalkeeper Identification Evaluation Record
+# Stage 7 - Team / Player / Ball Context
+# Last updated: 2026-10-06
+# =========================================================
+
+context:
+  known_gap: "No 'Goalkeeper' class exists in the Stage 5 training data (Roboflow dataset only has Ball, Player, Referee). Goalkeeper identification must be done via heuristics on top of generic 'Player' detections, not direct classification."
+
+approach_tested:
+  signal_1: "Positional range - goalkeepers should show much smaller total movement range (x and y) than outfield players over time, since they stay near their own goal."
+  signal_2: "DBSCAN color-outlier signal from team_classification.py - goalkeepers often wear a kit color distinct from their own team."
+  combination: "Flagged tracks appearing in both the smallest-range group AND DBSCAN's outlier/noise group as strongest candidates."
+
+test_results:
+  test_clip_duration_sec: 15
+  track_110:
+    total_range_px: 60.0
+    note: "By far the smallest range (next smallest was 178.4px, ~3x larger) - strong positional signal on paper."
+    manual_verification: "Confirmed to be a regular outfield PLAYER, not a goalkeeper."
+  track_65:
+    total_range_px: 391.0
+    dbscan_outlier: true
+    note: "Flagged by BOTH signals combined."
+    manual_verification: "Confirmed to be a regular outfield PLAYER, not a goalkeeper."
+
+verdict: "FAILED on this test - both the strongest single-signal candidate and the combined-signal candidate were manually confirmed to be regular players, not goalkeepers."
+
+root_cause_analysis: >
+  The underlying theory (goalkeepers show smaller positional range) is sound
+  for a FULL MATCH, but the 15-second test clip used here is far too short
+  to distinguish genuine goalkeeper behavior from an outfield player who
+  simply stood still during one passage of play (e.g. during a stoppage,
+  corner kick, or while play was at the opposite end of the pitch). A short
+  clip cannot statistically separate these two cases.
+
+recommendation: >
+  Re-test this same heuristic approach over a much longer continuous window
+  (several minutes to a full half, not 15 seconds) before concluding the
+  method itself doesn't work. Over a full match, a true goalkeeper's range
+  should be dramatically and consistently smaller than every outfield
+  player's, which a 15-second sample cannot demonstrate. If a longer test
+  also fails, a dedicated goalkeeper-labeled dataset (fine-tuning a 4th
+  detection class) would be the more reliable fallback.
+
+status: "OPEN - deferred pending a longer-duration test. Documented as a known limitation rather than treated as solved."
+
+change_log:
+  - date: "2026-10-06"
+    change: "Tested position-range + DBSCAN-outlier heuristic for goalkeeper identification on a 15-second clip. Both top candidates manually confirmed as false positives (regular players). Root cause identified as insufficient clip duration, not a flawed underlying theory. Deferred for re-testing on longer footage."

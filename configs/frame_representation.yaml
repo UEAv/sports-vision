@@ -1,0 +1,65 @@
+# =========================================================
+# Frame-Level Representation Record (Stage 7 deliverable)
+# Last updated: 2026-10-09
+# =========================================================
+
+files:
+  script: "src/context/frame_representation.py"
+  full_output: "data/analysis/context/frame_representation.json   (compact, meant for code)"
+  readable_sample: "data/analysis/context/frame_representation_sample.json   (frames 3000, 3095, 3250, indented)"
+  note: "The JSON outputs live under data/ and are gitignored. The script and this record are what get committed."
+
+structure:
+  frame:
+    quality: "camera_motion_px_per_sec, camera_high_motion (>= 300 px/sec), ball_detected, num_players, pose_available"
+    players: "per player: bbox, confidence, position, team (KMeans cluster + DBSCAN label), tracking (speed, direction, compensated speed/direction, edge_clipped), spatial (proximity to ball, nearest player), pose"
+    ball: "position, confidence, velocity, nearest player and distance, potential_possession (null on frames without a confident ball detection)"
+    goalkeeper: "null on every frame - documented gap"
+    teams: "track IDs grouped as cluster_0, cluster_1, unassigned"
+    spatial_relationships: "ball nearest player, possession candidate, close player pairs (within 80 px)"
+  design_note: "The script only joins existing outputs on (frame, track_id). It detects nothing new."
+
+first_real_run:
+  date: "2026-10-09"
+  clip: "Middlesbrough vs Preston North End, 720p, frames 3000-3374 (15 s)"
+  integrity_checks:
+    player_detections: "3089 of 3089 placed"
+    ball_detections: "200 of 200 placed"
+    pose_entries: "15 of 15 placed"
+  summary:
+    frames: 375
+    avg_players_per_frame: 8.2
+    frames_with_ball: "200 (53%)"
+    frames_with_pose: 3
+    frames_with_camera_estimate: 374
+    frames_with_high_camera_motion: 97
+    players_with_team_cluster: "3089 of 3089"
+    frames_with_possession_candidate: 140
+  testing_note: "The script was first tested on synthetic files in the same formats, including a deliberately mismatched pose entry to confirm the integrity check can fail."
+
+observations:
+  - "Frame 3000 has no camera estimate because it is the first frame of the clip (no previous detection to measure motion from). That is why 374 of 375 frames have one."
+  - "At frame 3095 the camera estimate is now 800 px/sec, against 788 before edge-clipped boxes were excluded. The estimate moved up, the direction expected if boxes pinned at the border had been dragging the median down."
+  - "'3089 of 3089 have a team cluster' does not mean every assignment is right. KMeans always assigns every track to one of two clusters, so the referee and goalkeeper tracks sit inside cluster_0 or cluster_1. Per-frame cluster counts can include them. dbscan_label is the only hint."
+  - "Pose success against camera motion, three sampled frames: 66 px/sec -> 10 of 11 usable, 800 px/sec -> 1 of 10 usable, first frame (no estimate) -> 4 of 5. Consistent with the idea that pose fails on blurred panning frames, but three frames is not a test."
+
+open_items:
+  - "Record which of tracks 40, 185, 91, 108 are the referee and the goalkeeper. A manual check found one of each among them, but the IDs were not written down."
+  - "Goalkeeper identification as a method is unresolved (see goalkeeper_identification_evaluation.yaml)."
+  - "Teams are unnamed clusters, not mapped to home/away."
+  - "Ball velocity is not camera-compensated."
+  - "Test whether pose success tracks camera motion across many more frames."
+  - "Track #91 (frame 3273) compensated speed of 664 px/sec is unexplained; widening EDGE_MARGIN_PX is optional."
+  - "Everything comes from one 15 second clip of one match."
+
+stage_7_status:
+  team_classification: "Done. KMeans for the 2-way split, DBSCAN as a weak outlier hint. Needs 720p or higher."
+  goalkeeper: "Deferred, documented gap."
+  ball_context: "Done. Confidence threshold 0.5."
+  player_context: "Done. Includes camera-motion compensation and edge flag."
+  pose: "Done with limits. Pretrained COCO pose model on per-player crops; 15 of 26 players usable on 3 sampled frames."
+  combined_deliverable: "Done."
+
+change_log:
+  - date: "2026-10-09"
+    change: "Built the combined frame-level representation and ran it on the real 720p clip; all integrity checks passed."
